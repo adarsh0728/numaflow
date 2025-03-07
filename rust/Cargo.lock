@@ -2405,6 +2405,8 @@ dependencies = [
  "derive_builder",
  "futures",
  "http 1.2.0",
+ "hyper 0.14.31",
+ "hyper-tls",
  "hyper-util",
  "kube",
  "numaflow 0.2.1",

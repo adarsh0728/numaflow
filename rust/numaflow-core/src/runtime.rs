@@ -1,9 +1,10 @@
 use chrono::Utc;
+use hyper::{Body, Method};
+use hyper::{Client, Request};
+use hyper_tls::HttpsConnector;
 use regex::Regex;
-use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
-use std::time::Duration;
 
 use std::str;
 use tonic::Status;
@@ -59,11 +60,23 @@ impl Runtime {
             replica,
         };
 
-        let client = ClientBuilder::new()
-            .timeout(Duration::from_secs(1))
-            .danger_accept_invalid_certs(true)
-            .build()?;
-        let response = client.post(daemon_url).json(&error_entry).send().await?;
+        // let client = ClientBuilder::new()
+        //     .timeout(Duration::from_secs(1))
+        //     .danger_accept_invalid_certs(true)
+        //     .build()?;
+        let https = HttpsConnector::new();
+        let client = Client::builder()
+            .http2_only(true)
+            .build::<_, hyper::Body>(https);
+
+        let json_body = serde_json::to_string(&error_entry)?;
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri(daemon_url)
+            .header("Content-Type", "application/json")
+            .body(Body::from(json_body))?;
+
+        let response = client.request(req).await?;
 
         if response.status().is_success() {
             println!("Runtime error reported successfully");
