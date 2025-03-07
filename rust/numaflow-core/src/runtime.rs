@@ -5,6 +5,7 @@ use hyper_tls::HttpsConnector;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use tracing::info;
 
 use std::str;
 use tonic::Status;
@@ -47,8 +48,10 @@ impl Runtime {
         let message = grpc_status.message().to_string();
         let details_bytes = grpc_status.details();
         let details_str = String::from_utf8_lossy(details_bytes).to_string();
-        let daemon_url =
-            "http://simple-mono-vertex-mv-daemon-svc.default.svc.cluster.local:4327/api/v1/runtime/errors";
+        let daemon_errors_url =
+            "http://simple-mono-vertex-mv-daemon-svc.default.svc:4327/api/v1/runtime/errors";
+        let daemon_metrics_url =
+            "http://simple-mono-vertex-mv-daemon-svc.default.svc:4327/api/v1/metrics";
 
         let error_entry = RuntimeErrorEntry {
             container_name,
@@ -60,28 +63,43 @@ impl Runtime {
             replica,
         };
 
-        // let client = ClientBuilder::new()
-        //     .timeout(Duration::from_secs(1))
-        //     .danger_accept_invalid_certs(true)
-        //     .build()?;
         let https = HttpsConnector::new();
         let client = Client::builder()
             .http2_only(true)
             .build::<_, hyper::Body>(https);
 
+        info!(
+            "Reporting runtime error to daemon server client: {:?}",
+            client
+        );
+
         let json_body = serde_json::to_string(&error_entry)?;
         let req = Request::builder()
             .method(Method::POST)
-            .uri(daemon_url)
+            .uri(daemon_errors_url)
             .header("Content-Type", "application/json")
             .body(Body::from(json_body))?;
 
-        let response = client.request(req).await?;
+        let metrics_req = Request::builder()
+            .method(Method::GET)
+            .uri(daemon_metrics_url)
+            .body(Body::empty())?;
 
-        if response.status().is_success() {
+        let metrics_res = client.request(metrics_req).await?;
+        let errors_response = client.request(req).await?;
+
+        if metrics_res.status().is_success() {
+            println!("Metrics req success!")
+        } else {
+            println!("Failed to get metrics!: {}", errors_response.status());
+        }
+        if errors_response.status().is_success() {
             println!("Runtime error reported successfully");
         } else {
-            println!("Failed to report runtime error: {}", response.status());
+            println!(
+                "Failed to report runtime error: {}",
+                errors_response.status()
+            );
         }
 
         Ok(())

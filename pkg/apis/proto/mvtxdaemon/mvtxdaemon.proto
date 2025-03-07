@@ -76,12 +76,9 @@ service MonoVertexDaemonService {
     option (google.api.http).get = "/api/v1/status";
   };
 
-}
-
-// MonoVertexRuntimeService is a grpc service that is used to provide any vertex runtime info.
-service MonoVertexRuntimeService {
   rpc PersistRuntimeError (PersistRuntimeErrorRequest) returns (PersistRuntimeErrorResponse) {
     option (google.api.http).post = "/api/v1/runtime/errors";
     option (google.api.http).body = "*";
-  }
+  };
+
 }
