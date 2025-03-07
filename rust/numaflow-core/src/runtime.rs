@@ -1,8 +1,9 @@
 use chrono::Utc;
 use regex::Regex;
-use reqwest::Client;
+use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
+use std::time::Duration;
 
 use std::str;
 use tonic::Status;
@@ -58,7 +59,10 @@ impl Runtime {
             replica,
         };
 
-        let client = Client::new();
+        let client = ClientBuilder::new()
+            .timeout(Duration::from_secs(1))
+            .danger_accept_invalid_certs(true)
+            .build()?;
         let response = client.post(daemon_url).json(&error_entry).send().await?;
 
         if response.status().is_success() {
