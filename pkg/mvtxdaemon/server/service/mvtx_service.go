@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -84,7 +83,6 @@ func NewMoveVertexService(
 }
 
 func (mvs *MonoVertexService) GetMonoVertexMetrics(ctx context.Context, empty *emptypb.Empty) (*mvtxdaemon.GetMonoVertexMetricsResponse, error) {
-	logging.FromContext(ctx).Infow("Received metrics req")
 	return mvs.fetchMonoVertexMetrics(ctx)
 }
 
@@ -196,8 +194,6 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 
 func (s *MonoVertexService) PersistRuntimeError(ctx context.Context, req *mvtxdaemon.PersistRuntimeErrorRequest) (*mvtxdaemon.PersistRuntimeErrorResponse, error) {
 	logging.FromContext(ctx).Errorw("Received runtime error", zap.Any("request", req))
-	// FIXME: Implement this method
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -206,7 +202,6 @@ func (s *MonoVertexService) PersistRuntimeError(ctx context.Context, req *mvtxda
 	if !ok {
 		s.localCache[cacheKey] = make([]ErrorDetails, 0)
 	}
-	log.Print("persisting error in local cache")
 	s.localCache[cacheKey] = append(s.localCache[cacheKey], ErrorDetails{
 		Container: req.GetContainerName(),
 		Timestamp: req.GetTimestamp(),
@@ -214,7 +209,6 @@ func (s *MonoVertexService) PersistRuntimeError(ctx context.Context, req *mvtxda
 		Message:   req.GetMessage(),
 		Details:   req.GetDetails(),
 	})
-
 	return &mvtxdaemon.PersistRuntimeErrorResponse{
 		Status: "Success",
 	}, nil
