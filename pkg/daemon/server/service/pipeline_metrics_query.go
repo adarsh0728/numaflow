@@ -313,9 +313,9 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 							ps.localCache[cacheKey] = make([]ErrorDetails, 0)
 						}
 						log.Infof("Persisting error in local cache for: %s", cacheKey)
-						for _, detail := range apiResponse.Errors {
-							ps.localCache[cacheKey] = append(ps.localCache[cacheKey], detail)
-						}
+						// overwrite --> max 10 error files for a container
+						// is taken care by write flow
+						ps.localCache[cacheKey] = apiResponse.Errors
 						ps.cacheMutex.Unlock()
 					}
 				}

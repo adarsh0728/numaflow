@@ -54,6 +54,7 @@ impl Runtime {
 
         let file_path = dir_path.join(file_name);
         let mut file = File::create(&file_path)?;
+        //FIXME: at max 10 files should be there in a subdirectory
         file.write_all(json_str.as_bytes())?;
 
         Ok(())
