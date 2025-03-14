@@ -50,7 +50,7 @@ type RuntimeErrorApiResponse struct {
 	Errors  []ErrorDetails `json:"errors"`
 }
 type ErrorDetails struct {
-	Container string `json:"container"`
+	Container string `json:"container_name"`
 	Timestamp string `json:"timestamp"`
 	Code      string `json:"code"`
 	Message   string `json:"message"`
