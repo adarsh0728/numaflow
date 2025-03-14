@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -48,6 +49,10 @@ type metricsHttpClient interface {
 
 type PodReplica string
 
+type RuntimeErrorApiResponse struct {
+	ErrMssg string         `json:"err_mssg"`
+	Errors  []ErrorDetails `json:"errors"`
+}
 type ErrorDetails struct {
 	Container string `json:"container"`
 	Timestamp string `json:"timestamp"`
@@ -270,7 +275,7 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 					replicas = vertex.CalculateReplicas()
 				}
 
-				for i := 0; i < replicas; i++ {
+				for i := 0; i <= replicas; i++ {
 					// Get the headless service name
 					// We can query the metrics endpoint of the (i)th pod to obtain this value.
 					// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:1234/runtime/errors
@@ -280,10 +285,22 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 						log.Debugf("Error reading the runtime errors endpoint: %f", err.Error())
 						continue
 					} else {
+
+						// Read the response body
+						body, err := io.ReadAll(res.Body)
+						if err != nil {
+							log.Errorf("Error reading response body from %s: %v", url, err)
+							continue
+						}
+
 						// Parse the response body into errorDetails
-						var errorDetails []ErrorDetails
-						if err := json.NewDecoder(res.Body).Decode(&errorDetails); err != nil {
+						var apiResponse RuntimeErrorApiResponse
+						if err := json.Unmarshal(body, &apiResponse); err != nil {
 							log.Errorf("Error decoding runtime error response from %s: %v", url, err)
+							continue
+						}
+
+						if apiResponse.ErrMssg != "" {
 							continue
 						}
 
@@ -296,7 +313,7 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 							ps.localCache[cacheKey] = make([]ErrorDetails, 0)
 						}
 						log.Infof("Persisting error in local cache for: %s", cacheKey)
-						for _, detail := range errorDetails {
+						for _, detail := range apiResponse.Errors {
 							ps.localCache[cacheKey] = append(ps.localCache[cacheKey], detail)
 						}
 						ps.cacheMutex.Unlock()
