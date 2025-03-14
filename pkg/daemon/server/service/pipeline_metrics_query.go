@@ -247,8 +247,7 @@ func (ps *PipelineMetadataQuery) PersistRuntimeErrors(ctx context.Context) {
 func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	vtxNamespace := ps.pipeline.Namespace
-	runtimePort := 1234
-	runtimePath := "runtime/errors"
+	runtimeErrorsPath := "runtime/errors"
 
 	runtimeErrorsTimeStep := 60 * time.Second
 	ticker := time.NewTicker(runtimeErrorsTimeStep)
@@ -266,12 +265,12 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 				}
 
 				headlessServiceName := vertex.GetHeadlessServiceName()
-				replicas := 1
 				abstractVertex := ps.pipeline.GetVertex(vtx.Name)
+				var replicas int
+				// TODO(fix): use active pods logic
 				if abstractVertex.IsReduceUDF() {
 					replicas = abstractVertex.GetPartitionCount()
 				} else {
-					// TODO(fix): this is not updating even if replicas > 1
 					replicas = vertex.CalculateReplicas()
 				}
 
@@ -279,10 +278,10 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 					// Get the headless service name
 					// We can query the metrics endpoint of the (i)th pod to obtain this value.
 					// example for 0th pod : https://simple-pipeline-in-0.simple-pipeline-in-headless.default.svc:1234/runtime/errors
-					url := fmt.Sprintf("https://%s-%v.%s.%s.svc:%v/%s", vertexName, i, headlessServiceName, vtxNamespace, runtimePort, runtimePath)
+					url := fmt.Sprintf("https://%s-%v.%s.%s.svc:%v/%s", vertexName, i, headlessServiceName, vtxNamespace, v1alpha1.VertexMonitorPort, runtimeErrorsPath)
 
 					if res, err := ps.httpClient.Get(url); err != nil {
-						log.Debugf("Error reading the runtime errors endpoint: %f", err.Error())
+						log.Errorw("Error reading the runtime errors endpoint: %f", err.Error())
 						continue
 					} else {
 
@@ -293,7 +292,7 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 							continue
 						}
 
-						// Parse the response body into errorDetails
+						// Parse the response body into runtime api response
 						var apiResponse RuntimeErrorApiResponse
 						if err := json.Unmarshal(body, &apiResponse); err != nil {
 							log.Errorf("Error decoding runtime error response from %s: %v", url, err)
@@ -313,8 +312,7 @@ func (ps *PipelineMetadataQuery) persistRuntimeErrors(ctx context.Context) {
 							ps.localCache[cacheKey] = make([]ErrorDetails, 0)
 						}
 						log.Infof("Persisting error in local cache for: %s", cacheKey)
-						// overwrite --> max 10 error files for a container
-						// is taken care by write flow
+						//overwrite the errors - max 10 files for a container to be checked by write flow
 						ps.localCache[cacheKey] = apiResponse.Errors
 						ps.cacheMutex.Unlock()
 					}

@@ -165,6 +165,7 @@ func (mvs *MonoVertexService) PersistRuntimeErrors(ctx context.Context) {
 func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 	log := logging.FromContext(ctx)
 	headlessServiceName := mvs.monoVtx.GetHeadlessServiceName()
+	// TODO(fix): use active pods logic
 	replicas := mvs.monoVtx.CalculateReplicas()
 	mvtxName := mvs.monoVtx.Name
 	mvtxNamespace := mvs.monoVtx.Namespace
@@ -176,7 +177,6 @@ func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			// Iterate over the replicas and fetch the runtime errors
 			for i := 0; i <= replicas; i++ {
 				// Get the headless service name
 				// We can query the runtime errors endpoint of the (i)th pod to obtain this value.
@@ -194,7 +194,7 @@ func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 						continue
 					}
 
-					// Parse the response body into errorDetails
+					// Parse the response body into runtime api response
 					var apiResponse RuntimeErrorApiResponse
 					if err := json.Unmarshal(body, &apiResponse); err != nil {
 						log.Errorf("Error decoding runtime error response from %s: %v", url, err)
@@ -213,8 +213,8 @@ func (mvs *MonoVertexService) persistRuntimeErrors(ctx context.Context) {
 					if !ok {
 						mvs.localCache[cacheKey] = make([]ErrorDetails, 0)
 					}
-					// overwrite --> max 10 error files for a container
-					// is taken care by write flow
+					log.Infof("Persisting error in local cache for: %s", cacheKey)
+					//overwrite the errors - max 10 files for a container to be checked by write flow
 					mvs.localCache[cacheKey] = apiResponse.Errors
 					mvs.cacheMutex.Unlock()
 					log.Infow("local cache till now", "cacheVal: ", mvs.localCache[cacheKey])
