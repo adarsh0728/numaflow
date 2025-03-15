@@ -182,3 +182,29 @@ func (mvs *MonoVertexService) startHealthCheck(ctx context.Context) {
 		}
 	}
 }
+
+func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *mvtxdaemon.GetMonoVertexErrorsRequest) (*mvtxdaemon.GetMonoVertexErrorsResponse, error) {
+	monoVertex, replica := request.GetMonoVertex(), request.GetReplica()
+	podReplica := runtimePkg.PodReplica(fmt.Sprintf("%s-mv-%s", monoVertex, replica))
+
+	resp := new(mvtxdaemon.GetMonoVertexErrorsResponse)
+
+	cache := mvs.runtime.GetLocalCache()
+
+	// If the errors are present in the local cache, return the errors.
+	if errors, ok := cache[podReplica]; ok {
+		replicaError := make([]*mvtxdaemon.MonoVertexError, len(errors))
+		for i, err := range errors {
+			replicaError[i] = &mvtxdaemon.MonoVertexError{
+				Container: err.Container,
+				Timestamp: err.Timestamp,
+				Code:      err.Code,
+				Message:   err.Message,
+				Details:   err.Details,
+			}
+		}
+		resp.Errors = replicaError
+	}
+
+	return resp, nil
+}

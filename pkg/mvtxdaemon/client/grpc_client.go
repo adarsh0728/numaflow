@@ -69,3 +69,11 @@ func (dc *grpcClient) Close() error {
 	}
 	return nil
 }
+
+func (dc *grpcClient) GetMonoVertexErrors(ctx context.Context, monoVertex, replica string) ([]*mvtxdaemon.MonoVertexError, error) {
+	if rspn, err := dc.client.GetMonoVertexErrors(ctx, &mvtxdaemon.GetMonoVertexErrorsRequest{MonoVertex: monoVertex, Replica: replica}); err != nil {
+		return nil, err
+	} else {
+		return rspn.Errors, nil
+	}
+}

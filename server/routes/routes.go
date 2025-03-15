@@ -181,6 +181,7 @@ func v1Routes(ctx context.Context, r gin.IRouter, dexObj *v1.DexObject, localUse
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/metrics", handler.GetMonoVertexMetrics)
 	// Get the health information of a mono vertex.
 	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/health", handler.GetMonoVertexHealth)
+	r.GET("/namespaces/:namespace/mono-vertices/:mono-vertex/replicas/:replica/errors", handler.GetMonoVertexErrors)
 	// Get the time series data across different dimensions.
 	r.POST("/metrics-proxy", handler.GetMetricData)
 	// Discover the metrics for a given object type.

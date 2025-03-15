@@ -21,7 +21,10 @@ const runtimeErrorsTimeStep = 60 * time.Second
 type MonoVtxRuntime interface {
 	Start(ctx context.Context) error
 	PersistRuntimeErrors(ctx context.Context)
+	GetLocalCache() map[PodReplica][]ErrorDetails
 }
+
+var _ MonoVtxRuntime = (*Runtime)(nil)
 
 type PodReplica string
 
@@ -145,4 +148,8 @@ func (r *Runtime) PersistRuntimeErrors(ctx context.Context) {
 			return
 		}
 	}
+}
+
+func (r *Runtime) GetLocalCache() map[PodReplica][]ErrorDetails {
+	return r.localCache
 }

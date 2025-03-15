@@ -1754,3 +1754,21 @@ func (h *handler) getContainerStatus(state corev1.ContainerState) string {
 		return "Unknown"
 	}
 }
+
+func (h *handler) GetMonoVertexErrors(c *gin.Context) {
+	ns, monoVertex, replica := c.Param("namespace"), c.Param("mono-vertex"), c.Param("replica")
+
+	client, err := h.getMonoVertexDaemonClient(ns, monoVertex)
+	if err != nil || client == nil {
+		h.respondWithError(c, fmt.Sprintf("failed to get daemon service client for mono vertex %q, %s", monoVertex, err.Error()))
+		return
+	}
+
+	errors, err := client.GetMonoVertexErrors(c, monoVertex, replica)
+	if err != nil {
+		h.respondWithError(c, fmt.Sprintf("Failed to get the errors for mono vertex %q: %s", monoVertex, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, NewNumaflowAPIResponse(nil, errors))
+}
