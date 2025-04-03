@@ -19,7 +19,7 @@ const CURRENT_FILE: &str = "current-numa.json";
 pub(crate) struct RuntimeErrorEntry {
     /// The name of the container where the error occurred.
     pub(crate) container: String,
-    /// The timestamp of the error in RFC 3339 format.
+    /// The timestamp of the error.
     pub(crate) timestamp: i64,
     /// The error code.
     pub(crate) code: String,
