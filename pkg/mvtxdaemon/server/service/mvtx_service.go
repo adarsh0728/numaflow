@@ -25,6 +25,7 @@ import (
 
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/prometheus/common/expfmt"
@@ -112,7 +113,7 @@ func (mvs *MonoVertexService) GetMonoVertexErrors(ctx context.Context, request *
 			for j, containerError := range err.ContainerErrors {
 				containerErrors[j] = &mvtxdaemon.ContainerError{
 					Container: containerError.Container,
-					Timestamp: containerError.Timestamp,
+					Timestamp: timestamppb.New(time.Unix(0,containerError.Timestamp)),
 					Code:      containerError.Code,
 					Message:   containerError.Message,
 					Details:   containerError.Details,
