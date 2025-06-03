@@ -3,7 +3,7 @@ use std::time::Duration;
 use crate::config::components::reduce::ReducerType;
 use crate::config::components::sink::{SinkConfig, SinkType};
 use crate::config::components::source::{SourceConfig, SourceType};
-use crate::config::components::transformer::TransformerConfig;
+use crate::config::components::transformer::{TransformerConfig, TransformerType};
 use crate::config::get_vertex_replica;
 use crate::config::pipeline::map::{MapMode, MapType, MapVtxConfig};
 use crate::config::pipeline::watermark::WatermarkConfig;
@@ -199,41 +199,52 @@ pub(crate) async fn create_transformer(
     cln_token: CancellationToken,
 ) -> error::Result<Option<Transformer>> {
     if let Some(transformer_config) = transformer_config {
-        if let config::components::transformer::TransformerType::UserDefined(ud_transformer) =
-            &transformer_config.transformer_type
-        {
-            let server_info = sdk_server_info(
-                ud_transformer.server_info_path.clone().into(),
-                cln_token.clone(),
-            )
-            .await?;
-            let metric_labels = metrics::sdk_info_labels(
-                config::get_component_type().to_string(),
-                config::get_vertex_name().to_string(),
-                server_info.language,
-                server_info.version,
-                ContainerType::SourceTransformer.to_string(),
-            );
-            metrics::global_metrics()
-                .sdk_info
-                .get_or_create(&metric_labels)
-                .set(1);
-
-            let mut transformer_grpc_client = SourceTransformClient::new(
-                grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
-            )
-            .max_encoding_message_size(ud_transformer.grpc_max_message_size)
-            .max_decoding_message_size(ud_transformer.grpc_max_message_size);
-            grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
-            return Ok(Some(
-                Transformer::new(
-                    batch_size,
-                    transformer_config.concurrency,
-                    transformer_grpc_client.clone(),
-                    tracker_handle,
+        match &transformer_config.transformer_type{
+            TransformerType::UserDefined(ud_transformer) => {
+                let server_info = sdk_server_info(
+                    ud_transformer.server_info_path.clone().into(),
+                    cln_token.clone(),
                 )
-                .await?,
-            ));
+                .await?;
+                let metric_labels = metrics::sdk_info_labels(
+                    config::get_component_type().to_string(),
+                    config::get_vertex_name().to_string(),
+                    server_info.language,
+                    server_info.version,
+                    ContainerType::SourceTransformer.to_string(),
+                );
+                metrics::global_metrics()
+                    .sdk_info
+                    .get_or_create(&metric_labels)
+                    .set(1);
+
+                let mut transformer_grpc_client = SourceTransformClient::new(
+                    grpc::create_rpc_channel(ud_transformer.socket_path.clone().into()).await?,
+                )
+                .max_encoding_message_size(ud_transformer.grpc_max_message_size)
+                .max_decoding_message_size(ud_transformer.grpc_max_message_size);
+                grpc::wait_until_transformer_ready(&cln_token, &mut transformer_grpc_client).await?;
+                return Ok(Some(
+                    Transformer::new(
+                        batch_size,
+                        transformer_config.concurrency,
+                        transformer_grpc_client.clone(),
+                        tracker_handle,
+                    )
+                    .await?,
+                ));
+            }
+            TransformerType::Filter(filter_config) => {
+                return Ok(Some(
+                    Transformer::new_filter(
+                        batch_size, 
+                        transformer_config.concurrency, 
+                        filter_config.expression.clone(), 
+                        tracker_handle,
+                    )
+                    .await?,
+                ));
+            }
         }
     }
     Ok(None)

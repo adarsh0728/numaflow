@@ -796,6 +796,15 @@ pub(crate) mod transformer {
     const DEFAULT_TRANSFORMER_SERVER_INFO_FILE: &str =
         "/var/run/numaflow/sourcetransformer-server-info";
 
+    use std::collections::HashMap;
+
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum TransformerType {
+        #[allow(dead_code)]
+        Filter(FilterConfig),
+        // EventTimeExtractor(EventTimeExtractorConfig),
+        UserDefined(UserDefinedConfig),
+    }
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct TransformerConfig {
         pub(crate) concurrency: usize,
@@ -803,14 +812,18 @@ pub(crate) mod transformer {
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    pub(crate) enum TransformerType {
-        #[allow(dead_code)]
-        Noop(NoopConfig), // will add built-in transformers
-        UserDefined(UserDefinedConfig),
+    pub(crate) struct FilterConfig {
+        pub expression: String
     }
 
-    #[derive(Debug, Clone, PartialEq)]
-    pub(crate) struct NoopConfig {}
+    impl FilterConfig {
+        pub fn new(kwargs: Option<HashMap<String, String>>) -> Self {
+            let expression = kwargs
+                .and_then(|mut args| args.remove("expression"))
+                .expect("Missing  expression");
+            Self { expression }
+        }
+    }
 
     #[derive(Debug, Clone, PartialEq)]
     pub(crate) struct UserDefinedConfig {

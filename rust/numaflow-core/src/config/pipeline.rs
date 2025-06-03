@@ -13,6 +13,7 @@ use super::{
     DEFAULT_CALLBACK_CONCURRENCY, ENV_CALLBACK_CONCURRENCY, ENV_CALLBACK_ENABLED,
     ENV_NUMAFLOW_SERVING_RESPONSE_STORE,
 };
+use crate::config::components::transformer::FilterConfig;
 use crate::Result;
 use crate::config::ENV_NUMAFLOW_SERVING_CALLBACK_STORE;
 use crate::config::ENV_NUMAFLOW_SERVING_SOURCE_SETTINGS;
@@ -336,9 +337,24 @@ impl PipelineConfig {
         let to_edges = vertex_obj.spec.to_edges.unwrap_or_default();
 
         let vertex: VertexType = if let Some(source) = vertex_obj.spec.source {
-            let transformer_config = source.transformer.as_ref().map(|_| TransformerConfig {
-                concurrency: batch_size as usize, // FIXME: introduce a separate field in the spec
-                transformer_type: TransformerType::UserDefined(Default::default()),
+            let transformer_config = source.transformer.as_ref().map(|transformer| {
+                if let Some(builtin) = &transformer.builtin{
+                    match builtin.name.as_str() {
+                        "filter" => TransformerConfig { 
+                            concurrency: batch_size as usize, 
+                            transformer_type: TransformerType::Filter(FilterConfig::new(builtin.kwargs.clone())) 
+                        },
+                        _ => TransformerConfig {
+                            concurrency: batch_size as usize,
+                            transformer_type: TransformerType::UserDefined(Default::default()),
+                        },
+                    }
+                } else {
+                    TransformerConfig {
+                        concurrency: batch_size as usize,
+                        transformer_type: TransformerType::UserDefined(Default::default()),
+                    }
+                }
             });
 
             VertexType::Source(SourceVtxConfig {

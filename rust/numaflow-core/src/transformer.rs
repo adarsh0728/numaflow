@@ -6,8 +6,9 @@ use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use tonic::transport::Channel;
 use tonic::{Code, Status};
-use tracing::error;
+use tracing::{error, info};
 
+use crate::transformer::filter::FilterTransformer;
 use crate::Result;
 use crate::config::pipeline::VERTEX_TYPE_SOURCE;
 use crate::config::{get_vertex_name, is_mono_vertex};
@@ -24,6 +25,7 @@ use crate::transformer::user_defined::UserDefinedTransformer;
 ///
 /// [User-Defined Transformer]: https://numaflow.numaproj.io/user-guide/sources/transformer/overview/#build-your-own-transformer
 pub(crate) mod user_defined;
+pub(crate) mod filter;
 
 /// TransformerActorMessage is the message that is sent to the transformer actor.
 struct TransformerActorMessage {
@@ -31,16 +33,21 @@ struct TransformerActorMessage {
     respond_to: oneshot::Sender<Result<Vec<Message>>>,
 }
 
+enum TransformerTypeActor {
+    UserDefined(UserDefinedTransformer),
+    Filter(FilterTransformer)
+}
+
 /// TransformerActor, handles the transformation of messages.
 struct TransformerActor {
     receiver: mpsc::Receiver<TransformerActorMessage>,
-    transformer: UserDefinedTransformer,
+    transformer: TransformerTypeActor,
 }
 
 impl TransformerActor {
     fn new(
         receiver: mpsc::Receiver<TransformerActorMessage>,
-        transformer: UserDefinedTransformer,
+        transformer: TransformerTypeActor,
     ) -> Self {
         Self {
             receiver,
@@ -52,9 +59,31 @@ impl TransformerActor {
     /// and the response is sent back to the caller using oneshot in this actor, this is because the
     /// downstream can handle multiple messages at once.
     async fn handle_message(&mut self, msg: TransformerActorMessage) {
-        self.transformer
-            .transform(msg.message, msg.respond_to)
-            .await;
+        match &mut self.transformer {
+            TransformerTypeActor::UserDefined(user_defined_transformer) => {
+                user_defined_transformer
+                    .transform(msg.message, msg.respond_to)
+                    .await;
+            }
+            TransformerTypeActor::Filter(filter_transformer) => {
+                let result = filter_transformer
+                    .apply(
+                        msg.message.event_time,
+                        &msg.message.value,
+                        &msg.message.keys,
+                    )
+                    .await;
+                let response = match result{
+                    Ok(Some(message)) => vec![message],
+                    Ok(None) => vec![],
+                    Err(e) => {
+                        error!("Filter transformation failed: {}", e);
+                        vec![]
+                    }
+                };
+                info!("response received: {:?}", response);
+            }
+        }
     }
 
     async fn run(mut self) {
@@ -83,7 +112,10 @@ impl Transformer {
         let (sender, receiver) = mpsc::channel(batch_size);
         let transformer_actor = TransformerActor::new(
             receiver,
-            UserDefinedTransformer::new(batch_size, client.clone()).await?,
+            TransformerTypeActor::UserDefined(
+                UserDefinedTransformer::new(batch_size, client.clone())
+                .await?,
+            )
         );
 
         tokio::spawn(async move {
@@ -95,6 +127,25 @@ impl Transformer {
             sender,
             tracker_handle,
             health_checker: Some(client),
+        })
+    }
+
+    pub(crate) async fn new_filter(
+        batch_size: usize,
+        concurrency: usize,
+        expression: String,
+        tracker_handle: TrackerHandle
+    ) -> Result<Self>{
+        let (sender, receiver) = mpsc::channel(batch_size);
+        let transformer_actor = TransformerActor::new(receiver, TransformerTypeActor::Filter(FilterTransformer::new(expression)));
+        tokio::spawn(async move {
+            transformer_actor.run().await;
+        });
+        Ok(Self {
+            concurrency,
+            sender,
+            tracker_handle,
+            health_checker: None, // No health checker for FilterTransformer
         })
     }
 
