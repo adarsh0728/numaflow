@@ -1,8 +1,15 @@
+# This pipeline uses gzip compression for ISB
+# Available out of the box only in Rust based backend, i.e, 1.6
+# In 1.5, you can switch to Rust backend by setting NUMAFLOW_RUNTIME environment variable to "rust"
+
 apiVersion: numaflow.numaproj.io/v1alpha1
 kind: Pipeline
 metadata:
   name: simple-pipeline
 spec:
+  interStepBuffer:
+      compression:
+        type: gzip
   vertices:
     - name: in
       scale:
@@ -16,8 +23,8 @@ spec:
       scale:
         min: 1
       udf:
-        builtin:
-          name: cat # A builtin UDF which simply cats the message
+        container:
+          image: quay.io/numaio/numaflow-go/map-forward-message:stable
     - name: out
       scale:
         min: 1
